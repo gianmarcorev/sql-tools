@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using CommandLine;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -10,7 +11,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("sql-tools")]
-[assembly: AssemblyCopyright("Copyright ©  2016")]
+[assembly: AssemblyCopyright("Copyright © Gianmarco Reverberi 2016")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -34,3 +35,11 @@ using System.Runtime.InteropServices;
 // [assembly: AssemblyVersion("1.0.*")]
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyInformationalVersion("1.0")]
+
+[assembly: AssemblyLicense(
+    "This is free software. You may redistribute copies of it under the terms of",
+    "the MIT License <http://www.opensource.org/licenses/mit-license.php>.")]
+[assembly: AssemblyUsage(
+    "Usage: YourApp -rMyData.in -wMyData.out --calculate",
+    "       YourApp -rMyData.in -i -j9.7 file0.def file1.def")]
