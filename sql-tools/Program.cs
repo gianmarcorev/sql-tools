@@ -1,6 +1,9 @@
 ﻿using CommandLine;
+using Deedle;
+using Microsoft.VisualBasic.FileIO;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using System.Reflection;
@@ -9,38 +12,32 @@ using System.Threading.Tasks;
 
 namespace sql_tools
 {
-    class Program
-    {
-        enum ExitCodes
-        {
-            IOERR = 7
+    class Program {
+        enum ExitCodes {
+            IOERR = 7,
+            TYPE_ERR = 8,
+            SQL_ERR = 9
         }
 
-        static string getAssemblyInfoVersion()
-        {
+        static string getAssemblyInfoVersion() {
             var version = Assembly
                 .GetExecutingAssembly()
-                .GetCustomAttribute(typeof(AssemblyInformationalVersionAttribute)) 
+                .GetCustomAttribute(typeof(AssemblyInformationalVersionAttribute))
                 as AssemblyInformationalVersionAttribute;
             return version.InformationalVersion;
         }
 
-        static string getPassword()
-        {
+        static string getPassword() {
             StringBuilder sb = new StringBuilder();
-            while (true)
-            {
+            while (true) {
                 ConsoleKeyInfo cki = Console.ReadKey(true);
-                if (cki.Key == ConsoleKey.Enter)
-                {
+                if (cki.Key == ConsoleKey.Enter) {
                     Console.WriteLine();
                     break;
                 }
 
-                if (cki.Key == ConsoleKey.Backspace)
-                {
-                    if (sb.Length > 0)
-                    {
+                if (cki.Key == ConsoleKey.Backspace) {
+                    if (sb.Length > 0) {
                         Console.Write("\b\0\b");
                         sb.Length--;
                     }
@@ -59,38 +56,9 @@ namespace sql_tools
                 "Connection Timeout=30;", server, db, user, pass);
         }
 
-        static void performConnectionTest()
-        {
-            Console.Write("Server: ");
-            string server = Console.ReadLine();
-            Console.Write("Database: ");
-            string database = Console.ReadLine();
-            Console.Write("Username: ");
-            string username = Console.ReadLine();
-            Console.Write("Password: ");
-            string password = getPassword();
+        static string getSqlConnectionString(CommonSubOptions options) {
+            string server, database, username, password;
 
-            string connString = getSqlConnectionString(server, database, username, password);
-
-            using (var connection = new SqlConnection(connString))
-            {
-                try {
-                    connection.Open();
-                    Console.WriteLine("Connected successfully.");
-                }
-                catch (InvalidOperationException e) {
-                    Console.WriteLine("Error: " + e.Message);
-                }
-                catch (SqlException e) {
-                    Console.WriteLine("Error: " + e.Message);
-                }
-            }
-        }
-
-        static void performQuery(QuerySubOptions options)
-        {
-            string server, database, username, password, query=string.Empty;
-            #region COLLECTPARAMS
             if (options.Host != null) {
                 server = options.Host;
             }
@@ -128,8 +96,46 @@ namespace sql_tools
             Console.WriteLine("Username: " + username);
             Console.WriteLine("Password: " + password);
 #endif
-            #endregion
-            string connString = getSqlConnectionString(server, database, username, password);
+            return getSqlConnectionString(server, database, username, password);
+        }
+
+        static string getSqlConnectionString() {
+            Console.Write("Server: ");
+            string server = Console.ReadLine();
+            Console.Write("Database: ");
+            string database = Console.ReadLine();
+            Console.Write("Username: ");
+            string username = Console.ReadLine();
+            Console.Write("Password: ");
+            string password = getPassword();
+
+            return getSqlConnectionString(server, database, username, password);
+        }
+
+        static void performConnectionTest()
+        {
+            string connString = getSqlConnectionString();
+
+            using (var connection = new SqlConnection(connString))
+            {
+                try {
+                    connection.Open();
+                    Console.WriteLine("Connected successfully.");
+                }
+                catch (InvalidOperationException e) {
+                    Console.WriteLine("Error: " + e.Message);
+                }
+                catch (SqlException e) {
+                    Console.WriteLine("Error: " + e.Message);
+                }
+            }
+        }
+
+        static void performQuery(QuerySubOptions options)
+        {
+            string  query=string.Empty;
+            
+            string connString = getSqlConnectionString(options);
 
             if (options.File != null) {
                 if (!System.IO.File.Exists(options.File)) {
@@ -170,6 +176,120 @@ namespace sql_tools
             }
         }
 
+        static DataTable getDataTabletFromCSVFile(string csv_file_path) {
+            DataTable csvData = new DataTable();
+            try {
+                using (TextFieldParser csvReader = new TextFieldParser(csv_file_path)) {
+                    csvReader.SetDelimiters(new string[] { "," });
+                    csvReader.HasFieldsEnclosedInQuotes = true;
+                    string[] colFields = csvReader.ReadFields();
+                    foreach (string column in colFields) {
+                        DataColumn datecolumn = new DataColumn(column);
+                        datecolumn.AllowDBNull = true;
+                        csvData.Columns.Add(datecolumn);
+                    }
+                    while (!csvReader.EndOfData) {
+                        string[] fieldData = csvReader.ReadFields();
+                        //Making empty value as null
+                        for (int i = 0; i < fieldData.Length; i++) {
+                            if (fieldData[i] == "") {
+                                fieldData[i] = null;
+                            }
+                        }
+                        csvData.Rows.Add(fieldData);
+                    }
+                }
+            }
+            catch (Exception ex) {
+                Console.WriteLine(ex.Message);
+            }
+            return csvData;
+        }
+
+    static bool checkTable(string table, SqlConnection conn)
+        {
+            using (var cmd = new SqlCommand()) {
+                cmd.Connection = conn;
+                cmd.CommandType = System.Data.CommandType.Text;
+                cmd.CommandText = string.Format(Constants.CHECK_TABLE, table);
+                return (int)cmd.ExecuteScalar() == 1;
+            }
+        }
+
+        static void createTable(string name, SqlConnection conn) {
+            // Build query
+        }
+
+        static void bulkInsert(BulkSubOptions options)
+        {
+            string filePath = options.Input;
+            InputFileType type = options.Type;
+
+            if (type == InputFileType.HDF) {
+                Console.WriteLine("Error: HDF files are currently not supported");
+                Environment.Exit((int)ExitCodes.TYPE_ERR);
+            }
+
+            if (!System.IO.File.Exists(filePath)) {
+                Console.WriteLine("Error: file not found");
+                Environment.Exit((int)ExitCodes.IOERR);
+            }
+
+            Console.WriteLine("Loading input file...");
+            var dataFrame = Frame.ReadCsv(filePath);
+            
+            // Most time we have a datetime in the first column
+
+            Console.WriteLine("Loading complete.");
+
+            string connString = getSqlConnectionString(options);
+            using (var connection = new SqlConnection(connString)) {
+                try {
+                    Console.WriteLine("Connecting to SQL Server...");
+                    //connection.Open();
+                    Console.WriteLine("Connected successfully.");
+                    Console.WriteLine("Checking if table exists...");
+//                    if (!checkTable(options.Table, connection)) {
+//                        Console.WriteLine("Error: table doesn't exist!");
+//                        Console.Write(" Would you like to create a new table? [Y/n]: ");
+//                        string res = Console.ReadLine();
+//                        if (res.ToLower()[0] == 'n') {
+//                            Console.WriteLine("Error: table doesn't exist!");
+//#if DEBUG
+//                            Console.ReadKey(true);
+//#endif
+//                            Environment.Exit((int)ExitCodes.SQL_ERR);
+//                        }
+
+                        // Infer column types
+                        string[] columnTypes = new string[dataFrame.ColumnTypes.Count()];
+                        for (int i = 0; i < dataFrame.ColumnTypes.Count(); i++) {
+                            columnTypes[i] = Constants.getSqlType(dataFrame.ColumnTypes.ElementAt(i).Name);
+                        }
+                    //}
+                    Console.WriteLine("Table exists");
+
+                    //using (var command = new SqlCommand()) {
+                    //    command.Connection = connection;
+                    //    command.CommandType = System.Data.CommandType.Text;
+                    //    command.CommandText = query;
+                    //    int res = command.ExecuteNonQuery();
+                    //    Console.WriteLine("Command executed, result is " + res);
+                    //}
+                }
+                catch (InvalidOperationException e) {
+                    Console.WriteLine("Error: " + e.Message);
+                }
+                catch (SqlException e) {
+                    Console.WriteLine("Error: " + e.Message);
+                }
+            }
+
+            
+
+            //int i = 0;
+        }
+
         static void Main(string[] args)
         {
             string invokedVerb = null;
@@ -193,6 +313,10 @@ namespace sql_tools
 
             if (invokedVerb == "query") {
                 performQuery((QuerySubOptions)invokedVerbInstance);
+            }
+
+            if (invokedVerb == "bulk") {
+                bulkInsert((BulkSubOptions)invokedVerbInstance);
             }
             //else if (options.Version) {
             //    Console.WriteLine("MSSQL Tools version " + getAssemblyInfoVersion());
