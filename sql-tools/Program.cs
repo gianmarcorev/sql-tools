@@ -1,14 +1,11 @@
-﻿using CommandLine;
-using Deedle;
-using Microsoft.VisualBasic.FileIO;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.Data;
+using System.Data.OleDb;
 using System.Data.SqlClient;
-using System.Linq;
+using System.Globalization;
+using System.IO;
 using System.Reflection;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace sql_tools
 {
@@ -50,10 +47,12 @@ namespace sql_tools
         }
 
         static string getSqlConnectionString(string server, string db, string user, string pass) {
-            return string.Format("Server=tcp:{0},1433;Database={1};" +
-                "Persist Security Info=False;User ID={2};Password={3};Pooling=False;" +
-                "MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;" +
-                "Connection Timeout=30;", server, db, user, pass);
+            //return string.Format("Server=tcp:{0},1433;Database={1};" +
+            //    "Persist Security Info=False;User ID={2};Password={3};Pooling=False;" +
+            //    "MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;" +
+            //    "Connection Timeout=30;", server, db, user, pass);
+            // TEMP
+            return Constants.LOCALDB_CONN_STR;
         }
 
         static string getSqlConnectionString(CommonSubOptions options) {
@@ -176,37 +175,27 @@ namespace sql_tools
             }
         }
 
-        static DataTable getDataTabletFromCSVFile(string csv_file_path) {
-            DataTable csvData = new DataTable();
-            try {
-                using (TextFieldParser csvReader = new TextFieldParser(csv_file_path)) {
-                    csvReader.SetDelimiters(new string[] { "," });
-                    csvReader.HasFieldsEnclosedInQuotes = true;
-                    string[] colFields = csvReader.ReadFields();
-                    foreach (string column in colFields) {
-                        DataColumn datecolumn = new DataColumn(column);
-                        datecolumn.AllowDBNull = true;
-                        csvData.Columns.Add(datecolumn);
-                    }
-                    while (!csvReader.EndOfData) {
-                        string[] fieldData = csvReader.ReadFields();
-                        //Making empty value as null
-                        for (int i = 0; i < fieldData.Length; i++) {
-                            if (fieldData[i] == "") {
-                                fieldData[i] = null;
-                            }
-                        }
-                        csvData.Rows.Add(fieldData);
-                    }
-                }
+        static DataTable getDataTableFromCsv(string path, bool hasHeaders) {
+            string header = hasHeaders ? "Yes" : "No";
+
+            string pathOnly = Path.GetDirectoryName(path);
+            string fileName = Path.GetFileName(path);
+
+            string sql = @"SELECT * FROM [" + fileName + "]";
+
+            using (OleDbConnection connection = new OleDbConnection(
+                      @"Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + pathOnly +
+                      ";Extended Properties=\"Text;HDR=" + header + "\""))
+            using (OleDbCommand command = new OleDbCommand(sql, connection))
+            using (OleDbDataAdapter adapter = new OleDbDataAdapter(command)) {
+                DataTable dataTable = new DataTable();
+                dataTable.Locale = CultureInfo.CurrentCulture;
+                adapter.Fill(dataTable);
+                return dataTable;
             }
-            catch (Exception ex) {
-                Console.WriteLine(ex.Message);
-            }
-            return csvData;
         }
 
-    static bool checkTable(string table, SqlConnection conn)
+        static bool checkTable(string table, SqlConnection conn)
         {
             using (var cmd = new SqlCommand()) {
                 cmd.Connection = conn;
@@ -235,59 +224,99 @@ namespace sql_tools
                 Environment.Exit((int)ExitCodes.IOERR);
             }
 
-            Console.WriteLine("Loading input file...");
-            var dataFrame = Frame.ReadCsv(filePath);
-            
-            // Most time we have a datetime in the first column
+            Console.WriteLine("WARNING: remember to use a table only if you are uploading data " +
+                "with all columns, including the primary key. Otherwise be sure to use a view " +
+                "of the table's columns or an error will raise.");
 
-            Console.WriteLine("Loading complete.");
+            //Console.WriteLine("Loading input file...");
+            //var dataFrame = Frame.ReadCsv(filePath, hasHeaders:!options.NoHeaders,
+            //    separators:options.Separator);
+            //DataTable data = getDataTableFromCsv(filePath, !options.NoHeaders);
+            //Console.WriteLine("Loading complete.");
 
             string connString = getSqlConnectionString(options);
             using (var connection = new SqlConnection(connString)) {
                 try {
                     Console.WriteLine("Connecting to SQL Server...");
-                    //connection.Open();
+                    connection.Open();
                     Console.WriteLine("Connected successfully.");
                     Console.WriteLine("Checking if table exists...");
-//                    if (!checkTable(options.Table, connection)) {
-//                        Console.WriteLine("Error: table doesn't exist!");
-//                        Console.Write(" Would you like to create a new table? [Y/n]: ");
-//                        string res = Console.ReadLine();
-//                        if (res.ToLower()[0] == 'n') {
-//                            Console.WriteLine("Error: table doesn't exist!");
-//#if DEBUG
-//                            Console.ReadKey(true);
-//#endif
-//                            Environment.Exit((int)ExitCodes.SQL_ERR);
-//                        }
 
-                        // Infer column types
-                        string[] columnTypes = new string[dataFrame.ColumnTypes.Count()];
-                        for (int i = 0; i < dataFrame.ColumnTypes.Count(); i++) {
-                            columnTypes[i] = Constants.getSqlType(dataFrame.ColumnTypes.ElementAt(i).Name);
-                        }
-                    //}
-                    Console.WriteLine("Table exists");
+                    // Check if table exists
+    //                if (!checkTable(destination, connection)) {
+    //                    // Create table
+    //                    Console.WriteLine("Error: table doesn't exist!");
+    //                    Console.WriteLine("WARNING: the table can be automatically created " +
+    //                        "inferring data types from loaded data, but this is still experimental.");
+    //                    Console.WriteLine("It's highly recommended to create the table manually.");
+    //                    Console.Write("Would you like to automatically create a new table? [Y/n]: ");
+    //                    string res = Console.ReadLine();
+    //                    if (res != string.Empty && res.ToLower()[0] == 'n') {
+    //                        Console.WriteLine("Error: table doesn't exist!");
+    //#if DEBUG
+    //                        Console.ReadKey(true);
+    //#endif
+    //                        Environment.Exit((int)ExitCodes.SQL_ERR);
+    //                    }
 
-                    //using (var command = new SqlCommand()) {
-                    //    command.Connection = connection;
-                    //    command.CommandType = System.Data.CommandType.Text;
-                    //    command.CommandText = query;
-                    //    int res = command.ExecuteNonQuery();
-                    //    Console.WriteLine("Command executed, result is " + res);
+    //                    // Infer column types
+    //                    string[] columnTypes = new string[dataFrame.ColumnTypes.Count()];
+    //                    for (int i = 0; i < dataFrame.ColumnTypes.Count(); i++) {
+    //                        columnTypes[i] = Constants.getSqlType(dataFrame.ColumnTypes.ElementAt(i).Name);
+    //                    }
+
+    //                    Console.Write("Table name: ");
+    //                    string tableName = Console.ReadLine();
+
+    //                    // Build create table script
+    //                    // Columns
+    //                    StringBuilder sb = new StringBuilder();
+    //                    sb.AppendLine("ID int PRIMARY KEY NOT NULL,");
+    //                    for (int i = 0; i < dataFrame.ColumnCount; i++) {
+    //                        sb.Append(dataFrame.ColumnKeys.ElementAt(i) + " " +
+    //                            columnTypes[i] + " " + "NOT NULL");
+    //                        if (i < dataFrame.ColumnCount - 1) {
+    //                            sb.AppendLine(",");
+    //                        }
+    //                    }
+
+                        //string tableQuery = string.Format(Constants.CREATE_TABLE_BODY, "dbo", tableName, sb.ToString());
+                        //using (var command = new SqlCommand()) {
+                        //    command.Connection = connection;
+                        //    command.CommandType = System.Data.CommandType.Text;
+                        //    command.CommandText = tableQuery;
+                        //    int tableRes = command.ExecuteNonQuery();
+                        //    Console.WriteLine("Command executed, result is " + res);
+                        //}
                     //}
+
+                    //Console.WriteLine("Table exists");
+                    //using (var bulkCopy = new SqlBulkCopy(connection)) {
+                    //    bulkCopy.DestinationTableName = options.Table;
+
+                    //    try {
+                    //        //bulkCopy.WriteToServer(dataFrame.ToDataTable().);
+                    //    }
+                    //    catch (Exception) {
+
+                    //        throw;
+                    //    }
+                    //}
+
+                    using (var cmd = new SqlCommand()) {
+                        cmd.Connection = connection;
+                        cmd.CommandType = System.Data.CommandType.Text;
+                        cmd.CommandText = string.Format(Constants.BULK_INSERT_CSV,
+                            options.Destination, options.Input, options.Separator,
+                            options.HasHeaders ? "2" : "1");
+                        int res = cmd.ExecuteNonQuery();
+                        Console.WriteLine("Command executed, number of rows affected: " + res);
+                    }
                 }
-                catch (InvalidOperationException e) {
-                    Console.WriteLine("Error: " + e.Message);
-                }
-                catch (SqlException e) {
+                catch (Exception e) {
                     Console.WriteLine("Error: " + e.Message);
                 }
             }
-
-            
-
-            //int i = 0;
         }
 
         static void Main(string[] args)

@@ -41,7 +41,6 @@
       <HintPath>..\packages\Deedle.1.2.4\lib\net40\Deedle.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />

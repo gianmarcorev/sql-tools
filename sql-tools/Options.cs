@@ -1,10 +1,5 @@
 ﻿using CommandLine;
 using CommandLine.Text;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace sql_tools
 {
@@ -16,16 +11,16 @@ namespace sql_tools
 
     class CommonSubOptions
     {
-        [Option('h', "host", HelpText = "Host address")]
+        [Option('H', "host", HelpText = "Host address")]
         public string Host { get; set; }
 
-        [Option('d', "database", HelpText = "Database")]
+        [Option('D', "database", HelpText = "Database")]
         public string Database { get; set; }
 
-        [Option('u', "user", HelpText = "Username")]
+        [Option('U', "user", HelpText = "Username")]
         public string User { get; set; }
 
-        [Option('p', "password", HelpText = "Password")]
+        [Option('P', "password", HelpText = "Password")]
         public string Password { get; set; }
     }
 
@@ -43,11 +38,17 @@ namespace sql_tools
         [Option('i', "input", HelpText = "Input file containing data to be uploaded", Required = true)]
         public string Input { get; set; }
 
-        [Option('T', "type", HelpText = "Input file type (default CSV)", DefaultValue = InputFileType.CSV)]
+        [Option("type", HelpText = "Input file type (default CSV)", DefaultValue = InputFileType.CSV)]
         public InputFileType Type { get; set; }
 
-        [Option('t', "table", HelpText = "Table name", Required = true)]
-        public string Table { get; set; }
+        [Option("destination", HelpText = "Destination, can be a table or a view", Required = true)]
+        public string Destination { get; set; }
+
+        [Option("separator", HelpText = "Separator character for CSV files (default ',')", DefaultValue = ",")]
+        public string Separator { get; set; }
+
+        [Option("has-headers", HelpText = "Set to indicate that CSV has headers row")]
+        public bool HasHeaders { get; set; }
     }
 
     class Options

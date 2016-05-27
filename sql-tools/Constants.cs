@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
+﻿
 namespace sql_tools
 {
     static class Constants
@@ -20,5 +15,8 @@ namespace sql_tools
                 default: return null;
             }
         }
+
+        public const string LOCALDB_CONN_STR = @"Data Source=(localdb)\MSSQLLocalDB;Initial Catalog=ArubaTest;Integrated Security=True;Connect Timeout=30;Encrypt=False;TrustServerCertificate=True;ApplicationIntent=ReadWrite;MultiSubnetFailover=False;User ID=arubadbuser;Password=ArubaUniPR2016";
+        public const string BULK_INSERT_CSV = @"BULK INSERT {0} FROM '{1}' WITH ( FIELDTERMINATOR = '{2}', FIRSTROW = {3});";
     }
 }
